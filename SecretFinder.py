@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# SecretFinder - Tool for discover apikeys/accesstokens and sensitive data in js file
-# based to LinkFinder - github.com/GerbenJavado
-# By m4ll0k (@m4ll0k2) github.com/m4ll0k
-
-
 import os,sys
 if not sys.version_info.major >= 3:
     print("[ + ] Run this tool with python version 3.+")
@@ -53,9 +47,6 @@ _regex = {
     'authorization_bearer' : r'bearer [a-zA-Z0-9_\-\.=:_\+\/]{5,100}',
     'authorization_api' : r'api[key|_key|\s+]+[a-zA-Z0-9_\-]{5,100}',
     'mailgun_api_key' : r'key-[0-9a-zA-Z]{32}',
-    'twilio_api_key' : r'SK[0-9a-fA-F]{32}',
-    'twilio_account_sid' : r'AC[a-zA-Z0-9_\-]{32}',
-    'twilio_app_sid' : r'AP[a-zA-Z0-9_\-]{32}',
     'paypal_braintree_access_token' : r'access_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}',
     'square_oauth_secret' : r'sq0csp-[ 0-9A-Za-z\-_]{43}|sq0[a-z]{3}-[0-9A-Za-z\-_]{22,43}',
     'square_access_token' : r'sqOatp-[0-9A-Za-z\-_]{22}|EAAA[a-zA-Z0-9]{60}',
@@ -147,7 +138,7 @@ def parser_error(msg):
     print('Error: %s'%msg)
     sys.exit(0)
 
-def getContext(matches,content,name,rex='.+?'):
+def getContext(matches,content,name,url,rex='.+?'):
     ''' get context '''
     items = []
     matches2 =  []
@@ -161,13 +152,14 @@ def getContext(matches,content,name,rex='.+?'):
             'matched'          : m,
             'name'             : name,
             'context'          : context,
+            'url'              : url,
             'multi_context'    : True if len(context) > 1 else False
         }
         items.append(item)
     return items
 
 
-def parser_file(content,mode=1,more_regex=None,no_dup=1):
+def parser_file(content,url,mode=1,more_regex=None,no_dup=1):
     ''' parser file '''
     if mode == 1:
         if len(content) > 1000000:
@@ -179,7 +171,7 @@ def parser_file(content,mode=1,more_regex=None,no_dup=1):
         r = re.compile(regex[1],re.VERBOSE|re.I)
         if mode == 1:
             all_matches = [(m.group(0),m.start(0),m.end(0)) for m in re.finditer(r,content)]
-            items = getContext(all_matches,content,regex[0])
+            items = getContext(all_matches,content,regex[0],url)
             if items != []:
                 all_items.append(items)
         else:
@@ -187,6 +179,7 @@ def parser_file(content,mode=1,more_regex=None,no_dup=1):
                 'matched' : m.group(0),
                 'context' : [],
                 'name'    : regex[0],
+                'url'     : url,
                 'multi_context' : False
             } for m in re.finditer(r,content)]
         if items != []:
@@ -284,7 +277,11 @@ def html_save(output):
 def cli_output(matched):
     ''' cli output '''
     for match in matched:
+        print()
         print(match.get('name')+'\t->\t'+match.get('matched').encode('ascii','ignore').decode('utf-8'))
+        print()
+        print(match.get('url'), end='\n\n')
+        print("___________________________________________________________")
 
 def urlParser(url):
     ''' urlParser '''
@@ -425,14 +422,12 @@ if __name__ == "__main__":
     # conver URLs to js file
     output = ''
     for url in urls:
-        print('[ + ] URL: '+url)
         if not args.burp:
             file = send_request(url)
         else:
             file = url.get('js')
             url = url.get('url')
-
-        matched = parser_file(file,mode)
+        matched = parser_file(file,str(url),mode)
         if args.output == 'cli':
             cli_output(matched)
         else:
